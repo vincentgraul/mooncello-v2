@@ -35,6 +35,19 @@ export {
 } from './entry.schema'
 export type { ApiError } from './error.schema'
 export { apiErrorSchema } from './error.schema'
+export type {
+  CreateInitialAdminRequest,
+  CreateInitialAdminResponse,
+  InstallationStatusResponse,
+} from './installation.schema'
+export {
+  createInitialAdminRequestSchema,
+  createInitialAdminResponseSchema,
+  INITIAL_ADMIN_PASSWORD_MIN_LENGTH,
+  INSTALLATION_ERROR_CODES,
+  INSTALLATION_ROUTES,
+  installationStatusResponseSchema,
+} from './installation.schema'
 export type { ListMediaResponse, Media, UploadMediaResponse } from './media.schema'
 export { listMediaResponseSchema, mediaSchema, uploadMediaResponseSchema } from './media.schema'
 export type {

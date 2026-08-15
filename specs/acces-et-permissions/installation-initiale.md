@@ -7,8 +7,8 @@ ni dépendre d'un mot de passe par défaut.
 **Critères d'acceptation :**
 
 - [ ] Tant qu'aucun utilisateur n'existe, toute route de l'admin redirige vers `/installation`
-- [ ] L'écran demande un email, un mot de passe et sa confirmation ; le mot de passe fait au moins
-      12 caractères et l'écran refuse la soumission en deçà
+- [ ] L'écran demande un nom, un email, un mot de passe et sa confirmation ; le mot de passe fait au
+      moins 12 caractères et l'écran refuse la soumission en deçà
 - [ ] La soumission crée l'utilisateur, lui attribue le rôle `admin`, ouvre une session et redirige
       vers le tableau de bord
 - [ ] Le rôle `editor` existe après l'installation, avec les permissions `read`, `create`, `update`
