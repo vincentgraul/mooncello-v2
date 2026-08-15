@@ -86,6 +86,10 @@ bun run fsd        # Steiger — conformité Feature-Sliced Design
 
 Ces quatre commandes tournent en CI. Elles doivent passer avant toute PR.
 
+Les tests de `apps/api` sont des tests d'intégration : ils ont besoin de Postgres (`bun run db:up`).
+La base `mooncello_test` est recréée et migrée automatiquement au démarrage de Vitest — migrations
+Better Auth puis migrations Kysely. La CI démarre le même Postgres en service.
+
 ### Architecture back — `apps/api`
 
 Monolithe modulaire découpé en **vertical slices**. Un module est un bounded context (`auth`,
