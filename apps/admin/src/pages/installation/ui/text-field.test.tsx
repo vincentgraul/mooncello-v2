@@ -14,7 +14,7 @@ describe('TextField', () => {
     expect(label).toHaveAttribute('for', field.getAttribute('id'))
   })
 
-  it("marque le champ invalide quand une erreur est affichée", () => {
+  it('marque le champ invalide quand une erreur est affichée', () => {
     render(<TextField label="Mot de passe" name="password" error="Trop court" />)
 
     expect(screen.getByLabelText('Mot de passe')).toHaveAttribute('aria-invalid', 'true')
