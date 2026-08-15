@@ -1,4 +1,8 @@
-import { INITIAL_ADMIN_PASSWORD_MIN_LENGTH, INSTALLATION_ROUTES } from '@mooncello/contracts'
+import {
+  INITIAL_ADMIN_PASSWORD_MIN_LENGTH,
+  INSTALLATION_ERROR_CODES,
+  INSTALLATION_ROUTES,
+} from '@mooncello/contracts'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   createMemoryHistory,
@@ -11,25 +15,31 @@ import {
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { installationStatusQueryOptions } from '@/shared/api'
 import { InstallationPage } from './installation-page'
 
 const VALID_PASSWORD = 'correct-horse-battery-staple'
 const TOO_SHORT_PASSWORD = 'a'.repeat(INITIAL_ADMIN_PASSWORD_MIN_LENGTH - 1)
 
-function jsonResponse(payload: unknown) {
+function jsonResponse(payload: unknown, status = 200) {
   return Promise.resolve({
-    ok: true,
-    status: 200,
+    ok: status < 400,
+    status,
     json: () => Promise.resolve(payload),
   } as Response)
 }
 
-function stubApi() {
+type CreateInitialAdminOutcome = { payload: unknown; status: number }
+
+const CREATED: CreateInitialAdminOutcome = {
+  payload: { user: { id: 'usr_1', name: 'Ada Lovelace', email: 'ada@example.com' } },
+  status: 201,
+}
+
+function stubApi(outcome: CreateInitialAdminOutcome = CREATED) {
   const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
     if (String(input).endsWith(INSTALLATION_ROUTES.createInitialAdmin.path)) {
-      return jsonResponse({
-        user: { id: 'usr_1', name: 'Ada Lovelace', email: 'ada@example.com' },
-      })
+      return jsonResponse(outcome.payload, outcome.status)
     }
 
     return jsonResponse({ installed: false })
@@ -78,7 +88,7 @@ function renderInstallationPage() {
     </QueryClientProvider>,
   )
 
-  return { router, user: userEvent.setup() }
+  return { queryClient, router, user: userEvent.setup() }
 }
 
 async function fillForm(
@@ -156,5 +166,52 @@ describe('InstallationPage', () => {
       expect(router.state.location.pathname).toBe('/')
     })
     expect(await screen.findByText('Tableau de bord')).toBeInTheDocument()
+  })
+
+  it("Dès qu'au moins un utilisateur existe, `/installation` redirige vers `/connexion`", async () => {
+    const fetchMock = stubApi({
+      payload: {
+        code: INSTALLATION_ERROR_CODES.alreadyInstalled,
+        message: "L'instance est déjà installée",
+      },
+      status: 404,
+    })
+    const { queryClient, router, user } = renderInstallationPage()
+
+    await fillForm(user, { password: VALID_PASSWORD, confirmation: VALID_PASSWORD })
+    await user.click(screen.getByRole('button', { name: "Créer l'administrateur" }))
+
+    await waitFor(() => {
+      expect(createInitialAdminCalls(fetchMock)).toHaveLength(1)
+    })
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/connexion')
+    })
+    expect(await screen.findByText('Écran de connexion')).toBeInTheDocument()
+    expect(queryClient.getQueryData(installationStatusQueryOptions.queryKey)).toEqual({
+      installed: true,
+    })
+  })
+
+  it("Un échec de création affiche le message d'erreur et laisse l'écran d'installation ouvert", async () => {
+    const fetchMock = stubApi({
+      payload: { code: 'internal_error', message: 'Le rôle système « admin » est introuvable' },
+      status: 500,
+    })
+    const { queryClient, router, user } = renderInstallationPage()
+
+    await fillForm(user, { password: VALID_PASSWORD, confirmation: VALID_PASSWORD })
+    await user.click(screen.getByRole('button', { name: "Créer l'administrateur" }))
+
+    await waitFor(() => {
+      expect(createInitialAdminCalls(fetchMock)).toHaveLength(1)
+    })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Le rôle système « admin » est introuvable',
+    )
+    expect(router.state.location.pathname).toBe('/installation')
+    expect(queryClient.getQueryData(installationStatusQueryOptions.queryKey)).toBeUndefined()
   })
 })
