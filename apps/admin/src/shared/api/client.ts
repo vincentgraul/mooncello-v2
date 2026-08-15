@@ -1,6 +1,13 @@
-import { apiErrorSchema } from '@mooncello/contracts'
+import {
+  apiErrorSchema,
+  type CreateInitialAdminRequest,
+  createInitialAdminResponseSchema,
+  INSTALLATION_ROUTES,
+  installationStatusResponseSchema,
+} from '@mooncello/contracts'
 import { z } from 'zod'
 import { env } from '@/shared/config'
+import { ApiRequestError, HTTP_ERROR_CODE } from './api-request-error'
 
 const healthResponseSchema = z.object({ status: z.string() })
 
@@ -15,7 +22,10 @@ async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit
 
   if (!response.ok) {
     const parsed = apiErrorSchema.safeParse(payload)
-    throw new Error(parsed.success ? parsed.data.message : `Erreur HTTP ${response.status}`)
+
+    throw parsed.success
+      ? new ApiRequestError(parsed.data.code, parsed.data.message)
+      : new ApiRequestError(HTTP_ERROR_CODE, `Erreur HTTP ${response.status}`)
   }
 
   return schema.parse(payload)
@@ -23,4 +33,13 @@ async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit
 
 export const apiClient = {
   getHealth: () => request('/health', healthResponseSchema),
+  getInstallationStatus: () =>
+    request(INSTALLATION_ROUTES.status.path, installationStatusResponseSchema, {
+      method: INSTALLATION_ROUTES.status.method,
+    }),
+  createInitialAdmin: (body: CreateInitialAdminRequest) =>
+    request(INSTALLATION_ROUTES.createInitialAdmin.path, createInitialAdminResponseSchema, {
+      method: INSTALLATION_ROUTES.createInitialAdmin.method,
+      body: JSON.stringify(body),
+    }),
 }
