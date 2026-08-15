@@ -1,9 +1,19 @@
 import type { ApiError } from '@mooncello/contracts'
 import { createInitialAdminRequestSchema, INSTALLATION_ERROR_CODES } from '@mooncello/contracts'
-import type { Handler } from 'hono'
-import { AlreadyInstalledError, createInitialAdmin } from './installation.service'
+import type { Context, Handler } from 'hono'
+import { AlreadyInstalledError, createInitialAdmin, isInstalled } from './installation.service'
+
+function alreadyInstalled(c: Context, message: string): Response {
+  const body: ApiError = { code: INSTALLATION_ERROR_CODES.alreadyInstalled, message }
+
+  return c.json(body, 404)
+}
 
 export const createInitialAdminHandler: Handler = async (c) => {
+  if (await isInstalled()) {
+    return alreadyInstalled(c, new AlreadyInstalledError().message)
+  }
+
   const payload = createInitialAdminRequestSchema.parse(await c.req.json().catch(() => null))
 
   try {
@@ -16,12 +26,7 @@ export const createInitialAdminHandler: Handler = async (c) => {
     return c.json(body, 201)
   } catch (error) {
     if (error instanceof AlreadyInstalledError) {
-      const body: ApiError = {
-        code: INSTALLATION_ERROR_CODES.alreadyInstalled,
-        message: error.message,
-      }
-
-      return c.json(body, 404)
+      return alreadyInstalled(c, error.message)
     }
 
     throw error

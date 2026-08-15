@@ -23,42 +23,86 @@ export type InitialAdminCreation = {
   sessionCookies: string[]
 }
 
+type CreatedAdmin = {
+  id: string
+  name: string
+  email: string
+}
+
 export async function isInstalled(): Promise<boolean> {
   return hasAnyUser(database)
+}
+
+async function createAdminAccount(input: CreateInitialAdminRequest): Promise<CreatedAdmin> {
+  const context = await auth.$context
+  const passwordHash = await context.password.hash(input.password)
+
+  const user = await context.internalAdapter.createUser({
+    name: input.name,
+    email: input.email.toLowerCase(),
+    emailVerified: false,
+  })
+
+  await context.internalAdapter.linkAccount({
+    userId: user.id,
+    providerId: 'credential',
+    accountId: user.id,
+    password: passwordHash,
+  })
+
+  return { id: user.id, name: user.name, email: user.email }
+}
+
+async function removeAdminAccount(userId: string): Promise<void> {
+  const context = await auth.$context
+  await context.internalAdapter.deleteUser(userId)
+}
+
+async function openSession(input: CreateInitialAdminRequest): Promise<string[]> {
+  const { headers } = await auth.api.signInEmail({
+    body: { email: input.email, password: input.password },
+    returnHeaders: true,
+  })
+
+  return headers.getSetCookie()
 }
 
 export async function createInitialAdmin(
   input: CreateInitialAdminRequest,
 ): Promise<InitialAdminCreation> {
-  return database.transaction().execute(async (transaction) => {
-    await lockInstallation(transaction)
+  let createdUserId: string | undefined
 
-    if (await hasAnyUser(transaction)) {
-      throw new AlreadyInstalledError()
-    }
+  try {
+    return await database.transaction().execute(async (transaction) => {
+      await lockInstallation(transaction)
 
-    const adminRoleId = await findRoleIdBySlug(transaction, ADMIN_ROLE_SLUG)
+      if (await hasAnyUser(transaction)) {
+        throw new AlreadyInstalledError()
+      }
 
-    if (!adminRoleId) {
-      throw new Error(`Le rôle système « ${ADMIN_ROLE_SLUG} » est introuvable`)
-    }
+      const adminRoleId = await findRoleIdBySlug(transaction, ADMIN_ROLE_SLUG)
 
-    const { headers, response } = await auth.api.signUpEmail({
-      body: { name: input.name, email: input.email, password: input.password },
-      returnHeaders: true,
+      if (!adminRoleId) {
+        throw new Error(`Le rôle système « ${ADMIN_ROLE_SLUG} » est introuvable`)
+      }
+
+      const admin = await createAdminAccount(input)
+      createdUserId = admin.id
+
+      await assignRoleToUser(transaction, admin.id, adminRoleId)
+
+      return {
+        body: createInitialAdminResponseSchema.parse({
+          user: { id: admin.id, name: admin.name, email: admin.email },
+        }),
+        sessionCookies: await openSession(input),
+      }
     })
-
-    await assignRoleToUser(transaction, response.user.id, adminRoleId)
-
-    return {
-      body: createInitialAdminResponseSchema.parse({
-        user: {
-          id: response.user.id,
-          name: response.user.name,
-          email: response.user.email,
-        },
-      }),
-      sessionCookies: headers.getSetCookie(),
+  } catch (error) {
+    if (createdUserId) {
+      await removeAdminAccount(createdUserId)
     }
-  })
+
+    throw error
+  }
 }

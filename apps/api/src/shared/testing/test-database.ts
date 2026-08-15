@@ -7,7 +7,7 @@ import { FileMigrationProvider, Migrator } from 'kysely/migration'
 import pg from 'pg'
 import { auth } from '../../modules/auth/auth'
 import { env } from '../config/env'
-import { database } from '../database/database'
+import { closeDatabase, database } from '../database/database'
 
 const RESET_TABLES = ['user', 'session', 'account', 'verification', 'user_roles']
 
@@ -83,5 +83,5 @@ export async function resetTestDatabase(): Promise<void> {
 }
 
 export async function closeTestDatabase(): Promise<void> {
-  await database.destroy()
+  await closeDatabase()
 }
