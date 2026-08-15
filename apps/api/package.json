@@ -1,0 +1,34 @@
+{
+  "name": "@mooncello/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --env-file=../../.env --watch src/index.ts",
+    "start": "bun --env-file=../../.env src/index.ts",
+    "build": "bun build src/index.ts --target=bun --outdir=dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:migrate": "bun --env-file=../../.env src/shared/database/migrator.ts up",
+    "db:rollback": "bun --env-file=../../.env src/shared/database/migrator.ts down",
+    "auth:migrate": "set -a && . ../../.env && set +a && better-auth migrate --config src/modules/auth/auth.ts -y"
+  },
+  "dependencies": {
+    "@mooncello/contracts": "workspace:*",
+    "@mooncello/field-types": "workspace:*",
+    "@scalar/hono-api-reference": "0.11.14",
+    "better-auth": "1.6.29",
+    "hono": "4.13.2",
+    "kysely": "0.29.5",
+    "pg": "8.23.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@better-auth/cli": "1.4.21",
+    "@mooncello/typescript-config": "workspace:*",
+    "@types/bun": "latest",
+    "@types/pg": "8.15.6",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}

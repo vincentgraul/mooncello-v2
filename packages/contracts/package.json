@@ -1,0 +1,20 @@
+{
+  "name": "@mooncello/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mooncello/field-types": "workspace:*",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@mooncello/typescript-config": "workspace:*",
+    "typescript": "7.0.2"
+  }
+}

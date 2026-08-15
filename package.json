@@ -1,0 +1,32 @@
+{
+  "name": "mooncello",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "packageManager": "bun@1.3.11",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "fsd": "steiger ./apps/admin/src",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:migrate": "bun run --filter @mooncello/api db:migrate",
+    "db:setup": "bun run db:up && bun run --filter @mooncello/api auth:migrate && bun run db:migrate"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.8",
+    "@feature-sliced/steiger-plugin": "0.7.0",
+    "steiger": "0.6.0",
+    "turbo": "2.10.10",
+    "typescript": "7.0.2"
+  }
+}

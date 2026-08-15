@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(bun:*)",
+      "Bash(bunx:*)",
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(docker compose:*)",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__get_code_connect_map",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__get_code_connect_suggestions",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__get_context_for_code_connect",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__get_design_context",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__get_figjam",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__get_figma_skill",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__get_libraries",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__get_metadata",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__get_motion_context",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__get_screenshot",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__get_shader_effect",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__get_shader_fill",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__get_variable_defs",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__list_file_components_for_code_connect",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__list_shader_effects",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__list_shader_fills",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__read_skill_uri",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__search_design_system",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__download_assets",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__whoami"
+    ],
+    "deny": [
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__add_code_connect_map",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__create_new_file",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__generate_diagram",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__send_code_connect_mappings",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__upload_assets",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__use_figma",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__weave_run_tool",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__weave_upload_asset",
+      "mcp__97fa04f8-ba45-4afa-8b73-36672a99790d__export_video",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(gh pr merge:*)",
+      "Read(./.env)",
+      "Read(./.env.local)"
+    ]
+  }
+}

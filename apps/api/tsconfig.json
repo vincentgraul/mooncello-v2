@@ -1,0 +1,4 @@
+{
+  "extends": "@mooncello/typescript-config/node.json",
+  "include": ["src/**/*.ts"]
+}

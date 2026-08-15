@@ -1,0 +1,9 @@
+{
+  "extends": "@mooncello/typescript-config/react.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", ".storybook/**/*.ts"]
+}
