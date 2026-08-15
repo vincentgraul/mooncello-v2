@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: mooncello-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mooncello
+      POSTGRES_PASSWORD: mooncello
+      POSTGRES_DB: mooncello
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mooncello -d mooncello']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
