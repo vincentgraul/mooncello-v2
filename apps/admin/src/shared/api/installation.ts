@@ -5,5 +5,4 @@ import { apiClient } from './client'
 export const installationStatusQueryOptions = queryOptions({
   queryKey: ['installation', 'status'],
   queryFn: (): Promise<InstallationStatusResponse> => apiClient.getInstallationStatus(),
-  staleTime: 0,
 })

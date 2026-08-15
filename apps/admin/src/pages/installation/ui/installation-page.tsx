@@ -100,7 +100,6 @@ export function InstallationPage() {
                 <form.Field name="name">
                   {(field) => (
                     <TextField
-                      id={field.name}
                       name={field.name}
                       label="Nom"
                       autoComplete="name"
@@ -119,7 +118,6 @@ export function InstallationPage() {
                 <form.Field name="email">
                   {(field) => (
                     <TextField
-                      id={field.name}
                       name={field.name}
                       type="email"
                       label="Adresse email"
@@ -139,7 +137,6 @@ export function InstallationPage() {
                 <form.Field name="password">
                   {(field) => (
                     <TextField
-                      id={field.name}
                       name={field.name}
                       type="password"
                       label="Mot de passe"
@@ -160,7 +157,6 @@ export function InstallationPage() {
                 <form.Field name="passwordConfirmation">
                   {(field) => (
                     <TextField
-                      id={field.name}
                       name={field.name}
                       type="password"
                       label="Confirmation du mot de passe"

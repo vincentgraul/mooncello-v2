@@ -14,8 +14,8 @@ const healthResponseSchema = z.object({ status: z.string() })
 async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit): Promise<T> {
   const response = await fetch(`${env.VITE_API_URL}${path}`, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
     ...init,
+    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
   })
 
   const payload: unknown = await response.json()
