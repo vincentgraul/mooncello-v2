@@ -1,6 +1,7 @@
 {
   "extends": "@mooncello/typescript-config/react.json",
   "compilerOptions": {
+    "types": ["vite/client", "node"],
     "paths": {
       "@/*": ["./src/*"]
     }
@@ -8,6 +9,8 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "e2e/**/*.ts",
+    "playwright.config.ts",
     "vite.config.ts",
     "vitest.setup.ts",
     ".storybook/**/*.ts"
