@@ -1,14 +1,18 @@
 import {
   createInitialAdminResponseSchema,
+  INITIAL_ADMIN_PASSWORD_MAX_LENGTH,
+  INITIAL_ADMIN_PASSWORD_MIN_LENGTH,
   INSTALLATION_ERROR_CODES,
   INSTALLATION_ROUTES,
   installationStatusResponseSchema,
 } from '@mooncello/contracts'
 import { sql } from 'kysely'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { app } from '../../../app'
 import { DATABASE_POOL_MAX_CONNECTIONS, database } from '../../../shared/database/database'
 import { resetTestDatabase } from '../../../shared/testing/test-database'
+import { auth } from '../auth'
+import { createInitialAdmin } from './installation.service'
 
 const initialAdmin = {
   name: 'Ada Lovelace',
@@ -22,16 +26,31 @@ async function requestStatus(): Promise<Response> {
   return app.request(INSTALLATION_ROUTES.status.path)
 }
 
-async function requestInstallation(body: unknown): Promise<Response> {
+async function readStatus(): Promise<{ installed: boolean }> {
+  return installationStatusResponseSchema.parse(await (await requestStatus()).json())
+}
+
+async function requestInstallation(
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<Response> {
   return app.request(INSTALLATION_ROUTES.createInitialAdmin.path, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify(body),
   })
 }
 
 async function requestSignUp(body: unknown): Promise<Response> {
   return app.request('/api/auth/sign-up/email', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+async function requestSignIn(body: unknown): Promise<Response> {
+  return app.request('/api/auth/sign-in/email', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
@@ -85,6 +104,27 @@ async function repairRoleAssignment(): Promise<void> {
   await sql`drop function if exists fail_role_assignment()`.execute(database)
 }
 
+async function breakUserDeletion(): Promise<void> {
+  await sql`
+    create function fail_user_deletion() returns trigger language plpgsql as $$
+    begin
+      raise exception 'échec simulé de la suppression de l''utilisateur';
+    end
+    $$
+  `.execute(database)
+
+  await sql`
+    create trigger fail_user_deletion
+    before delete on "user"
+    for each row execute function fail_user_deletion()
+  `.execute(database)
+}
+
+async function repairUserDeletion(): Promise<void> {
+  await sql`drop trigger if exists fail_user_deletion on "user"`.execute(database)
+  await sql`drop function if exists fail_user_deletion()`.execute(database)
+}
+
 async function listRoleSlugsOf(email: string): Promise<string[]> {
   const result = await sql<{ slug: string }>`
     select roles.slug
@@ -109,13 +149,40 @@ async function countAdmins(): Promise<number> {
   return result.rows[0]?.total ?? 0
 }
 
+async function listSessions(): Promise<{ ipAddress: string; userAgent: string }[]> {
+  const result = await sql<{ ipAddress: string; userAgent: string }>`
+    select "ipAddress", "userAgent" from session
+  `.execute(database)
+
+  return result.rows
+}
+
+async function interruptInstallationAfterUserCreation(email: string): Promise<string> {
+  const context = await auth.$context
+  const user = await context.internalAdapter.createUser({
+    name: initialAdmin.name,
+    email,
+    emailVerified: false,
+  })
+
+  await context.internalAdapter.linkAccount({
+    userId: user.id,
+    providerId: 'credential',
+    accountId: user.id,
+    password: await context.password.hash(initialAdmin.password),
+  })
+
+  return user.id
+}
+
 describe('installation', () => {
   beforeEach(async () => {
     await repairRoleAssignment()
+    await repairUserDeletion()
     await resetTestDatabase()
   })
 
-  it("tant qu'aucun utilisateur n'existe, le statut d'installation répond que l'instance n'est pas installée", async () => {
+  it("tant qu'aucun utilisateur ne détient le rôle `admin`, le statut d'installation répond que l'instance n'est pas installée", async () => {
     const response = await requestStatus()
 
     expect(response.status).toBe(200)
@@ -134,7 +201,7 @@ describe('installation', () => {
     expect(installationStatusResponseSchema.safeParse(body).success).toBe(true)
   })
 
-  it("dès qu'au moins un utilisateur existe, le statut d'installation répond que l'instance est installée", async () => {
+  it("dès qu'un utilisateur détient le rôle `admin`, le statut d'installation répond que l'instance est installée", async () => {
     await requestInstallation(initialAdmin)
 
     const response = await requestStatus()
@@ -158,12 +225,43 @@ describe('installation', () => {
     expect(response.headers.getSetCookie().join(';')).toContain('session_token')
   })
 
+  it("la session ouverte à l'installation enregistre l'adresse IP et l'agent utilisateur de la requête", async () => {
+    const response = await requestInstallation(initialAdmin, {
+      'user-agent': 'Mooncello-Test/1.0',
+      'x-forwarded-for': '203.0.113.7',
+    })
+
+    expect(response.status).toBe(201)
+    expect(await listSessions()).toEqual([
+      { ipAddress: '203.0.113.7', userAgent: 'Mooncello-Test/1.0' },
+    ])
+  })
+
   it("la réponse de création ne divulgue pas le mot de passe de l'administrateur initial", async () => {
     const response = await requestInstallation(initialAdmin)
     const body = (await response.json()) as { user: Record<string, unknown> }
 
     expect(Object.keys(body)).toEqual(['user'])
     expect(Object.keys(body.user).sort()).toEqual(['email', 'id', 'name'])
+  })
+
+  it('un email saisi en casse mixte est normalisé en minuscules et reste connectable', async () => {
+    const response = await requestInstallation({ ...initialAdmin, email: 'Ada@Mooncello.Test' })
+
+    expect(response.status).toBe(201)
+
+    const body = createInitialAdminResponseSchema.parse(await response.json())
+
+    expect(body.user.email).toBe('ada@mooncello.test')
+    expect(await listRoleSlugsOf('ada@mooncello.test')).toEqual(['admin'])
+    expect(response.headers.getSetCookie().join(';')).toContain('session_token')
+
+    const signIn = await requestSignIn({
+      email: 'Ada@Mooncello.Test',
+      password: initialAdmin.password,
+    })
+
+    expect(signIn.status).toBe(200)
   })
 
   it("le rôle `editor` existe après l'installation, avec les permissions `read`, `create`, `update` et `publish` sur tous les types", async () => {
@@ -192,15 +290,34 @@ describe('installation', () => {
     ])
   })
 
-  it("le mot de passe fait au moins 12 caractères et l'endpoint refuse la soumission en deçà", async () => {
-    const response = await requestInstallation({ ...initialAdmin, password: 'trop-court' })
+  it("le mot de passe fait entre 12 et 128 caractères et l'endpoint refuse la soumission hors de ces bornes", async () => {
+    const tooShort = await requestInstallation({
+      ...initialAdmin,
+      password: 'a'.repeat(INITIAL_ADMIN_PASSWORD_MIN_LENGTH - 1),
+    })
 
-    expect(response.status).toBe(422)
-    await expect(response.json()).resolves.toMatchObject({ code: 'validation_error' })
+    expect(tooShort.status).toBe(422)
+    await expect(tooShort.json()).resolves.toMatchObject({ code: 'validation_error' })
+
+    const tooLong = await requestInstallation({
+      ...initialAdmin,
+      password: 'a'.repeat(INITIAL_ADMIN_PASSWORD_MAX_LENGTH + 1),
+    })
+
+    expect(tooLong.status).toBe(422)
+    await expect(tooLong.json()).resolves.toMatchObject({ code: 'validation_error' })
     expect(await countUsers()).toBe(0)
+
+    const atMaxLength = await requestInstallation({
+      ...initialAdmin,
+      password: 'a'.repeat(INITIAL_ADMIN_PASSWORD_MAX_LENGTH),
+    })
+
+    expect(atMaxLength.status).toBe(201)
+    expect(await countUsers()).toBe(1)
   })
 
-  it("dès qu'au moins un utilisateur existe, l'endpoint de création de l'administrateur initial répond 404, même avec une charge valide", async () => {
+  it("dès qu'un utilisateur détient le rôle `admin`, l'endpoint de création de l'administrateur initial répond 404, même avec une charge valide", async () => {
     const first = await requestInstallation(initialAdmin)
 
     expect(first.status).toBe(201)
@@ -216,6 +333,17 @@ describe('installation', () => {
       code: INSTALLATION_ERROR_CODES.alreadyInstalled,
     })
     expect(await countUsers()).toBe(1)
+  })
+
+  it("dès qu'un utilisateur détient le rôle `admin`, l'endpoint de création de l'administrateur initial répond 404, même avec une charge invalide", async () => {
+    expect((await requestInstallation(initialAdmin)).status).toBe(201)
+
+    const response = await requestInstallation({ name: '', email: 'pas-un-email', password: 'x' })
+
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toMatchObject({
+      code: INSTALLATION_ERROR_CODES.alreadyInstalled,
+    })
   })
 
   it("deux soumissions concurrentes ne créent qu'un seul administrateur", async () => {
@@ -268,9 +396,7 @@ describe('installation', () => {
     expect(await countUsers()).toBe(0)
     expect(await countRowsIn('account')).toBe(0)
     expect(await countRowsIn('session')).toBe(0)
-    expect(installationStatusResponseSchema.parse(await (await requestStatus()).json())).toEqual({
-      installed: false,
-    })
+    expect(await readStatus()).toEqual({ installed: false })
 
     await repairRoleAssignment()
 
@@ -279,6 +405,54 @@ describe('installation', () => {
     expect(retried.status).toBe(201)
     expect(await countUsers()).toBe(1)
     expect(await listRoleSlugsOf(initialAdmin.email)).toEqual(['admin'])
+  })
+
+  it("un échec de la compensation est journalisé, relance l'erreur d'origine et ne verrouille pas l'installation", async () => {
+    await breakRoleAssignment()
+    await breakUserDeletion()
+
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(createInitialAdmin(initialAdmin, new Headers())).rejects.toThrow(
+      /échec simulé de l'attribution du rôle/,
+    )
+
+    const journal = logged.mock.calls.flat().map(String).join('\n')
+
+    logged.mockRestore()
+
+    expect(journal).toContain("échec simulé de la suppression de l'utilisateur")
+    expect(await countUsers()).toBe(1)
+    expect(await readStatus()).toEqual({ installed: false })
+
+    await repairUserDeletion()
+    await repairRoleAssignment()
+
+    const retried = await requestInstallation(initialAdmin)
+
+    expect(retried.status).toBe(201)
+    expect(await countUsers()).toBe(1)
+    expect(await listRoleSlugsOf(initialAdmin.email)).toEqual(['admin'])
+  })
+
+  it("une installation interrompue entre la création de l'utilisateur et l'attribution du rôle laisse l'instance réinstallable, y compris avec le même email — l'utilisateur sans rôle ne verrouille pas l'installation et ne bloque pas une nouvelle tentative", async () => {
+    const orphanId = await interruptInstallationAfterUserCreation(initialAdmin.email)
+
+    expect(await countUsers()).toBe(1)
+    expect(await readStatus()).toEqual({ installed: false })
+
+    const retried = await requestInstallation(initialAdmin)
+
+    expect(retried.status).toBe(201)
+
+    const body = createInitialAdminResponseSchema.parse(await retried.json())
+
+    expect(body.user.id).not.toBe(orphanId)
+    expect(body.user.email).toBe(initialAdmin.email)
+    expect(await countUsers()).toBe(1)
+    expect(await countAdmins()).toBe(1)
+    expect(await listRoleSlugsOf(initialAdmin.email)).toEqual(['admin'])
+    expect(await readStatus()).toEqual({ installed: true })
   })
 
   it("l'inscription libre est coupée : `POST /api/auth/sign-up/email` est refusé et l'installation continue de fonctionner", async () => {
@@ -296,16 +470,5 @@ describe('installation', () => {
     expect(installation.status).toBe(201)
     expect(await countUsers()).toBe(1)
     expect(await listRoleSlugsOf(initialAdmin.email)).toEqual(['admin'])
-  })
-
-  it("dès qu'au moins un utilisateur existe, l'endpoint de création de l'administrateur initial répond 404, même avec une charge invalide", async () => {
-    expect((await requestInstallation(initialAdmin)).status).toBe(201)
-
-    const response = await requestInstallation({ name: '', email: 'pas-un-email', password: 'x' })
-
-    expect(response.status).toBe(404)
-    await expect(response.json()).resolves.toMatchObject({
-      code: INSTALLATION_ERROR_CODES.alreadyInstalled,
-    })
   })
 })

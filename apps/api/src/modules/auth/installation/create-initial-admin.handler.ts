@@ -17,7 +17,7 @@ export const createInitialAdminHandler: Handler = async (c) => {
   const payload = createInitialAdminRequestSchema.parse(await c.req.json().catch(() => null))
 
   try {
-    const { body, sessionCookies } = await createInitialAdmin(payload)
+    const { body, sessionCookies } = await createInitialAdmin(payload, c.req.raw.headers)
 
     for (const cookie of sessionCookies) {
       c.header('set-cookie', cookie, { append: true })

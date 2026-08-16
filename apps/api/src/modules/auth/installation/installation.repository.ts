@@ -8,12 +8,31 @@ export async function lockInstallation(executor: Kysely<Database>): Promise<void
   await sql`select pg_advisory_xact_lock(${sql.lit(INSTALLATION_LOCK_KEY)})`.execute(executor)
 }
 
-export async function hasAnyUser(executor: Kysely<Database>): Promise<boolean> {
-  const result = await sql<{ installed: boolean }>`
-    select exists (select 1 from "user") as installed
+export async function hasUserWithRole(
+  executor: Kysely<Database>,
+  roleSlug: string,
+): Promise<boolean> {
+  const result = await sql<{ found: boolean }>`
+    select exists (
+      select 1
+      from user_roles
+      join roles on roles.id = user_roles.role_id
+      join "user" on "user".id = user_roles.user_id
+      where roles.slug = ${roleSlug}
+    ) as found
   `.execute(executor)
 
-  return result.rows[0]?.installed ?? false
+  return result.rows[0]?.found ?? false
+}
+
+export async function listUsersWithoutRole(executor: Kysely<Database>): Promise<string[]> {
+  const result = await sql<{ id: string }>`
+    select "user".id
+    from "user"
+    where not exists (select 1 from user_roles where user_roles.user_id = "user".id)
+  `.execute(executor)
+
+  return result.rows.map((row) => row.id)
 }
 
 export async function findRoleIdBySlug(

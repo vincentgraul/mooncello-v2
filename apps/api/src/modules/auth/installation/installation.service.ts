@@ -1,15 +1,20 @@
 import type { CreateInitialAdminRequest, CreateInitialAdminResponse } from '@mooncello/contracts'
 import { createInitialAdminResponseSchema } from '@mooncello/contracts'
+import type { Kysely } from 'kysely'
 import { database } from '../../../shared/database/database'
+import type { Database } from '../../../shared/database/schema'
 import { auth } from '../auth'
 import {
   assignRoleToUser,
   findRoleIdBySlug,
-  hasAnyUser,
+  hasUserWithRole,
+  listUsersWithoutRole,
   lockInstallation,
 } from './installation.repository'
 
 const ADMIN_ROLE_SLUG = 'admin'
+
+const SESSION_CONTEXT_HEADERS = ['user-agent', 'x-forwarded-for']
 
 export class AlreadyInstalledError extends Error {
   constructor() {
@@ -30,7 +35,7 @@ type CreatedAdmin = {
 }
 
 export async function isInstalled(): Promise<boolean> {
-  return hasAnyUser(database)
+  return hasUserWithRole(database, ADMIN_ROLE_SLUG)
 }
 
 async function createAdminAccount(input: CreateInitialAdminRequest): Promise<CreatedAdmin> {
@@ -39,7 +44,7 @@ async function createAdminAccount(input: CreateInitialAdminRequest): Promise<Cre
 
   const user = await context.internalAdapter.createUser({
     name: input.name,
-    email: input.email.toLowerCase(),
+    email: input.email,
     emailVerified: false,
   })
 
@@ -53,14 +58,50 @@ async function createAdminAccount(input: CreateInitialAdminRequest): Promise<Cre
   return { id: user.id, name: user.name, email: user.email }
 }
 
-async function removeAdminAccount(userId: string): Promise<void> {
+async function removeUserAccount(userId: string): Promise<void> {
   const context = await auth.$context
   await context.internalAdapter.deleteUser(userId)
 }
 
-async function openSession(input: CreateInitialAdminRequest): Promise<string[]> {
+async function removeInterruptedInstallations(executor: Kysely<Database>): Promise<void> {
+  for (const userId of await listUsersWithoutRole(executor)) {
+    await removeUserAccount(userId)
+  }
+}
+
+async function compensateAdminAccount(userId: string, cause: unknown): Promise<void> {
+  try {
+    await removeUserAccount(userId)
+  } catch (compensationError) {
+    console.error(
+      `Compensation impossible : l'utilisateur ${userId} reste sans rôle et devra être nettoyé à la prochaine installation`,
+      compensationError,
+      cause,
+    )
+  }
+}
+
+function toSessionContextHeaders(requestHeaders: Headers): Headers {
+  const headers = new Headers()
+
+  for (const name of SESSION_CONTEXT_HEADERS) {
+    const value = requestHeaders.get(name)
+
+    if (value !== null) {
+      headers.set(name, value)
+    }
+  }
+
+  return headers
+}
+
+async function openSession(
+  input: CreateInitialAdminRequest,
+  requestHeaders: Headers,
+): Promise<string[]> {
   const { headers } = await auth.api.signInEmail({
     body: { email: input.email, password: input.password },
+    headers: toSessionContextHeaders(requestHeaders),
     returnHeaders: true,
   })
 
@@ -69,6 +110,7 @@ async function openSession(input: CreateInitialAdminRequest): Promise<string[]> 
 
 export async function createInitialAdmin(
   input: CreateInitialAdminRequest,
+  requestHeaders: Headers,
 ): Promise<InitialAdminCreation> {
   let createdUserId: string | undefined
 
@@ -76,7 +118,7 @@ export async function createInitialAdmin(
     return await database.transaction().execute(async (transaction) => {
       await lockInstallation(transaction)
 
-      if (await hasAnyUser(transaction)) {
+      if (await hasUserWithRole(transaction, ADMIN_ROLE_SLUG)) {
         throw new AlreadyInstalledError()
       }
 
@@ -85,6 +127,8 @@ export async function createInitialAdmin(
       if (!adminRoleId) {
         throw new Error(`Le rôle système « ${ADMIN_ROLE_SLUG} » est introuvable`)
       }
+
+      await removeInterruptedInstallations(transaction)
 
       const admin = await createAdminAccount(input)
       createdUserId = admin.id
@@ -95,12 +139,12 @@ export async function createInitialAdmin(
         body: createInitialAdminResponseSchema.parse({
           user: { id: admin.id, name: admin.name, email: admin.email },
         }),
-        sessionCookies: await openSession(input),
+        sessionCookies: await openSession(input, requestHeaders),
       }
     })
   } catch (error) {
     if (createdUserId) {
-      await removeAdminAccount(createdUserId)
+      await compensateAdminAccount(createdUserId, error)
     }
 
     throw error

@@ -15,7 +15,7 @@ function createPool(): pg.Pool {
   })
 }
 
-export const pool = createPool()
+const pool = createPool()
 
 export const authPool = createPool()
 
