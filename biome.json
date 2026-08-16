@@ -69,7 +69,7 @@
       }
     },
     {
-      "includes": ["**/shared/config/env.ts", "**/vitest.config.ts"],
+      "includes": ["**/shared/config/env.ts", "**/vitest.config.ts", "**/playwright.config.ts"],
       "linter": {
         "rules": {
           "style": {

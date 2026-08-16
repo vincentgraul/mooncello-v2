@@ -1,13 +1,14 @@
 import { betterAuth } from 'better-auth'
-import pg from 'pg'
 import { env } from '../../shared/config/env'
+import { authPool } from '../../shared/database/database'
 
 export const auth = betterAuth({
-  database: new pg.Pool({ connectionString: env.DATABASE_URL }),
+  database: authPool,
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
   trustedOrigins: [env.ADMIN_ORIGIN],
   emailAndPassword: {
     enabled: true,
+    disableSignUp: true,
   },
 })

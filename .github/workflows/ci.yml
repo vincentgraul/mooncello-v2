@@ -8,6 +8,22 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: mooncello
+          POSTGRES_PASSWORD: mooncello
+          POSTGRES_DB: mooncello
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U mooncello -d mooncello"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v5
 
@@ -28,3 +44,45 @@ jobs:
 
       - name: Feature-Sliced Design
         run: bun run fsd
+
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: mooncello
+          POSTGRES_PASSWORD: mooncello
+          POSTGRES_DB: mooncello
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U mooncello -d mooncello"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - run: bun install --frozen-lockfile
+
+      - name: Navigateurs Playwright
+        run: bunx playwright install --with-deps chromium
+        working-directory: apps/admin
+
+      - name: Tests end-to-end
+        run: bun run test:e2e
+        working-directory: apps/admin
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/admin/playwright-report
+          retention-days: 7

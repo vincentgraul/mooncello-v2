@@ -1,20 +1,84 @@
-import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router'
+import type { QueryClient } from '@tanstack/react-query'
+import {
+  createRootRouteWithContext,
+  createRoute,
+  createRouter,
+  Outlet,
+  type RouterHistory,
+  redirect,
+} from '@tanstack/react-router'
+import { ConnexionPage } from '@/pages/connexion'
 import { DashboardPage } from '@/pages/dashboard'
+import { InstallationPage } from '@/pages/installation'
+import { installationStatusQueryOptions } from '@/shared/api'
+import { ROUTES } from '@/shared/config'
+import { AppError } from './app-error'
 
-const rootRoute = createRootRoute({ component: Outlet })
+type RouterContext = {
+  queryClient: QueryClient
+}
+
+async function readInstallationStatus(queryClient: QueryClient) {
+  try {
+    return await queryClient.fetchQuery(installationStatusQueryOptions)
+  } catch (error) {
+    const lastKnownStatus = queryClient.getQueryData(installationStatusQueryOptions.queryKey)
+
+    if (lastKnownStatus === undefined) {
+      throw error
+    }
+
+    return lastKnownStatus
+  }
+}
+
+const rootRoute = createRootRouteWithContext<RouterContext>()({
+  component: Outlet,
+  errorComponent: AppError,
+  beforeLoad: async ({ context, location }) => {
+    const { installed } = await readInstallationStatus(context.queryClient)
+    const isOnInstallation = location.pathname === ROUTES.installation
+
+    if (!installed && !isOnInstallation) {
+      throw redirect({ to: ROUTES.installation })
+    }
+
+    if (installed && isOnInstallation) {
+      throw redirect({ to: ROUTES.connexion })
+    }
+  },
+})
 
 const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/',
+  path: ROUTES.dashboard,
   component: DashboardPage,
 })
 
-const routeTree = rootRoute.addChildren([dashboardRoute])
+const installationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: ROUTES.installation,
+  component: InstallationPage,
+})
 
-export const router = createRouter({ routeTree })
+const connexionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: ROUTES.connexion,
+  component: ConnexionPage,
+})
+
+const routeTree = rootRoute.addChildren([dashboardRoute, installationRoute, connexionRoute])
+
+export function createAppRouter(queryClient: QueryClient, history?: RouterHistory) {
+  return createRouter({
+    routeTree,
+    context: { queryClient },
+    history,
+  })
+}
 
 declare module '@tanstack/react-router' {
   interface Register {
-    router: typeof router
+    router: ReturnType<typeof createAppRouter>
   }
 }

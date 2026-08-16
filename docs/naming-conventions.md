@@ -22,6 +22,12 @@ en appliquent mécaniquement une partie — ce document couvre le reste.
 Les seules exceptions à `noDefaultExport` sont les fichiers de configuration
 (`vite.config.ts`, `playwright.config.ts`, `steiger.config.js`, `.storybook/*`) et les stories.
 
+Les tests de bout en bout Playwright font exception à `*.test.ts(x)` : ils vivent dans
+`apps/admin/e2e/`, hors de `src/`, et se nomment `*.spec.ts`. Le suffixe distinct est **délibéré** —
+il les tient hors du `include` de Vitest (`src/**/*.test.{ts,tsx}`), de sorte que `bun run test`
+n'essaie jamais de démarrer un navigateur et une base de données. Ils restent couverts par
+`bun run typecheck`, qui inclut `e2e/**/*.ts`.
+
 ---
 
 ## Front — `apps/admin`

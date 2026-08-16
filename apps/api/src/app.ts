@@ -1,7 +1,7 @@
 import { Scalar } from '@scalar/hono-api-reference'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { auth } from './modules/auth/auth'
+import { auth, installationRoutes } from './modules/auth'
 import { env } from './shared/config/env'
 import { errorHandler } from './shared/http/error.middleware'
 
@@ -14,5 +14,7 @@ app.onError(errorHandler)
 app.get('/health', (c) => c.json({ status: 'ok' }))
 
 app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw))
+
+app.route('/', installationRoutes)
 
 app.get('/docs', Scalar({ url: '/openapi.json' }))
