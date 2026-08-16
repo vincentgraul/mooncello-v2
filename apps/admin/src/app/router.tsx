@@ -18,11 +18,25 @@ type RouterContext = {
   queryClient: QueryClient
 }
 
+async function readInstallationStatus(queryClient: QueryClient) {
+  try {
+    return await queryClient.fetchQuery(installationStatusQueryOptions)
+  } catch (error) {
+    const lastKnownStatus = queryClient.getQueryData(installationStatusQueryOptions.queryKey)
+
+    if (lastKnownStatus === undefined) {
+      throw error
+    }
+
+    return lastKnownStatus
+  }
+}
+
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: Outlet,
   errorComponent: AppError,
   beforeLoad: async ({ context, location }) => {
-    const { installed } = await context.queryClient.fetchQuery(installationStatusQueryOptions)
+    const { installed } = await readInstallationStatus(context.queryClient)
     const isOnInstallation = location.pathname === ROUTES.installation
 
     if (!installed && !isOnInstallation) {
