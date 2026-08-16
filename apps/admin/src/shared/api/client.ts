@@ -11,11 +11,25 @@ import { ApiRequestError, HTTP_ERROR_CODE } from './api-request-error'
 
 const healthResponseSchema = z.object({ status: z.string() })
 
-async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit): Promise<T> {
+function buildHeaders(init?: RequestInit): Headers {
+  const headers = new Headers(init?.headers)
+
+  if (init?.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+
+  return headers
+}
+
+export async function apiRequest<T>(
+  path: string,
+  schema: z.ZodType<T>,
+  init?: RequestInit,
+): Promise<T> {
   const response = await fetch(`${env.VITE_API_URL}${path}`, {
     credentials: 'include',
     ...init,
-    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
+    headers: buildHeaders(init),
   })
 
   const payload: unknown = await response.json()
@@ -32,13 +46,13 @@ async function request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit
 }
 
 export const apiClient = {
-  getHealth: () => request('/health', healthResponseSchema),
+  getHealth: () => apiRequest('/health', healthResponseSchema),
   getInstallationStatus: () =>
-    request(INSTALLATION_ROUTES.status.path, installationStatusResponseSchema, {
+    apiRequest(INSTALLATION_ROUTES.status.path, installationStatusResponseSchema, {
       method: INSTALLATION_ROUTES.status.method,
     }),
   createInitialAdmin: (body: CreateInitialAdminRequest) =>
-    request(INSTALLATION_ROUTES.createInitialAdmin.path, createInitialAdminResponseSchema, {
+    apiRequest(INSTALLATION_ROUTES.createInitialAdmin.path, createInitialAdminResponseSchema, {
       method: INSTALLATION_ROUTES.createInitialAdmin.method,
       body: JSON.stringify(body),
     }),

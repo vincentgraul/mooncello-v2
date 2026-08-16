@@ -1,16 +1,30 @@
 import { execFileSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import pg from 'pg'
 
-const API_DIRECTORY = new URL('../../api', import.meta.url).pathname
+const API_DIRECTORY = fileURLToPath(new URL('../../api', import.meta.url))
 
-function requireEnv(name: string): string {
-  const value = process.env[name]
+const REQUIRED_ENV_VARIABLES = [
+  'DATABASE_URL',
+  'BETTER_AUTH_SECRET',
+  'BETTER_AUTH_URL',
+  'ADMIN_ORIGIN',
+] as const
 
-  if (!value) {
-    throw new Error(`Variable d'environnement manquante : ${name}`)
+function requireEnv(): Record<(typeof REQUIRED_ENV_VARIABLES)[number], string> {
+  const missing = REQUIRED_ENV_VARIABLES.filter((name) => !process.env[name])
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Variables d'environnement manquantes : ${missing.join(', ')}. ` +
+        `Les migrations Better Auth chargent la configuration de l'API, qui exige ${REQUIRED_ENV_VARIABLES.join(', ')}. ` +
+        `Lancez « bun run test:e2e », qui les fournit, ou définissez-les avant « bun run test:e2e:db ».`,
+    )
   }
 
-  return value
+  return Object.fromEntries(
+    REQUIRED_ENV_VARIABLES.map((name) => [name, String(process.env[name])]),
+  ) as Record<(typeof REQUIRED_ENV_VARIABLES)[number], string>
 }
 
 async function recreateDatabase(databaseUrl: string): Promise<void> {
@@ -49,7 +63,7 @@ function runMigrations(): void {
   })
 }
 
-const databaseUrl = requireEnv('DATABASE_URL')
+const { DATABASE_URL: databaseUrl } = requireEnv()
 
 await recreateDatabase(databaseUrl)
 runMigrations()

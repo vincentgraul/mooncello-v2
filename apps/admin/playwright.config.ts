@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
+import { E2E_DATABASE_URL } from './e2e/config'
 
 const ADMIN_PORT = 5174
 const API_PORT = 3399
@@ -7,8 +8,7 @@ const adminOrigin = `http://localhost:${ADMIN_PORT}`
 const apiOrigin = `http://localhost:${API_PORT}`
 
 const e2eEnv = {
-  DATABASE_URL:
-    process.env.E2E_DATABASE_URL ?? 'postgres://mooncello:mooncello@localhost:5433/mooncello_e2e',
+  DATABASE_URL: E2E_DATABASE_URL,
   BETTER_AUTH_SECRET: 'secret-de-test-e2e-de-32-caracteres-minimum',
   BETTER_AUTH_URL: apiOrigin,
   API_PORT: String(API_PORT),
@@ -22,7 +22,8 @@ export default defineConfig({
   retries: 0,
   use: {
     baseURL: adminOrigin,
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
