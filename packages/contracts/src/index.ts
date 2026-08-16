@@ -43,6 +43,7 @@ export type {
 export {
   createInitialAdminRequestSchema,
   createInitialAdminResponseSchema,
+  INITIAL_ADMIN_PASSWORD_MAX_LENGTH,
   INITIAL_ADMIN_PASSWORD_MIN_LENGTH,
   INSTALLATION_ERROR_CODES,
   INSTALLATION_ROUTES,

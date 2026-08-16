@@ -7,6 +7,8 @@ export const INSTALLATION_ROUTES = {
 
 export const INITIAL_ADMIN_PASSWORD_MIN_LENGTH = 12
 
+export const INITIAL_ADMIN_PASSWORD_MAX_LENGTH = 128
+
 export const installationStatusResponseSchema = z.strictObject({
   installed: z.boolean(),
 })
@@ -21,6 +23,10 @@ export const createInitialAdminRequestSchema = z.strictObject({
     .min(
       INITIAL_ADMIN_PASSWORD_MIN_LENGTH,
       `Le mot de passe doit faire au moins ${INITIAL_ADMIN_PASSWORD_MIN_LENGTH} caractères`,
+    )
+    .max(
+      INITIAL_ADMIN_PASSWORD_MAX_LENGTH,
+      `Le mot de passe ne peut pas dépasser ${INITIAL_ADMIN_PASSWORD_MAX_LENGTH} caractères`,
     ),
 })
 
