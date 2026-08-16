@@ -9,7 +9,10 @@ import {
   Text,
   Title,
 } from '@empreint/ui'
-import { INITIAL_ADMIN_PASSWORD_MIN_LENGTH } from '@mooncello/contracts'
+import {
+  INITIAL_ADMIN_PASSWORD_MAX_LENGTH,
+  INITIAL_ADMIN_PASSWORD_MIN_LENGTH,
+} from '@mooncello/contracts'
 import { useForm } from '@tanstack/react-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -140,7 +143,7 @@ export function InstallationPage() {
                       name={field.name}
                       type="password"
                       label="Mot de passe"
-                      hint={`Au moins ${INITIAL_ADMIN_PASSWORD_MIN_LENGTH} caractères.`}
+                      hint={`Entre ${INITIAL_ADMIN_PASSWORD_MIN_LENGTH} et ${INITIAL_ADMIN_PASSWORD_MAX_LENGTH} caractères.`}
                       autoComplete="new-password"
                       value={field.state.value}
                       error={

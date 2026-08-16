@@ -1,4 +1,5 @@
 import {
+  INITIAL_ADMIN_PASSWORD_MAX_LENGTH,
   INITIAL_ADMIN_PASSWORD_MIN_LENGTH,
   INSTALLATION_ERROR_CODES,
   INSTALLATION_ROUTES,
@@ -20,6 +21,7 @@ import { InstallationPage } from './installation-page'
 
 const VALID_PASSWORD = 'correct-horse-battery-staple'
 const TOO_SHORT_PASSWORD = 'a'.repeat(INITIAL_ADMIN_PASSWORD_MIN_LENGTH - 1)
+const TOO_LONG_PASSWORD = 'a'.repeat(INITIAL_ADMIN_PASSWORD_MAX_LENGTH + 1)
 
 function jsonResponse(payload: unknown, status = 200) {
   return Promise.resolve({
@@ -91,6 +93,31 @@ function renderInstallationPage() {
   return { queryClient, router, user: userEvent.setup() }
 }
 
+async function replaceValue(
+  user: ReturnType<typeof userEvent.setup>,
+  field: HTMLElement,
+  value: string,
+) {
+  await user.clear(field)
+  await user.click(field)
+  await user.paste(value)
+}
+
+async function fillPasswords(
+  user: ReturnType<typeof userEvent.setup>,
+  passwords: {
+    password: string
+    confirmation: string
+  },
+) {
+  await replaceValue(user, screen.getByLabelText('Mot de passe'), passwords.password)
+  await replaceValue(
+    user,
+    screen.getByLabelText('Confirmation du mot de passe'),
+    passwords.confirmation,
+  )
+}
+
 async function fillForm(
   user: ReturnType<typeof userEvent.setup>,
   passwords: {
@@ -100,8 +127,11 @@ async function fillForm(
 ) {
   await user.type(await screen.findByLabelText('Nom'), 'Ada Lovelace')
   await user.type(screen.getByLabelText('Adresse email'), 'ada@example.com')
-  await user.type(screen.getByLabelText('Mot de passe'), passwords.password)
-  await user.type(screen.getByLabelText('Confirmation du mot de passe'), passwords.confirmation)
+  await fillPasswords(user, passwords)
+}
+
+function submitButton() {
+  return screen.getByRole('button', { name: "Créer l'administrateur" })
 }
 
 describe('InstallationPage', () => {
@@ -109,7 +139,7 @@ describe('InstallationPage', () => {
     vi.unstubAllGlobals()
   })
 
-  it("L'écran demande un nom, un email, un mot de passe et sa confirmation ; le mot de passe fait au moins 12 caractères et l'écran refuse la soumission en deçà", async () => {
+  it(`L'écran demande un nom, un email, un mot de passe et sa confirmation ; le mot de passe fait entre ${INITIAL_ADMIN_PASSWORD_MIN_LENGTH} et ${INITIAL_ADMIN_PASSWORD_MAX_LENGTH} caractères et l'écran refuse la soumission hors de ces bornes`, async () => {
     const fetchMock = stubApi()
     const { user } = renderInstallationPage()
 
@@ -119,7 +149,7 @@ describe('InstallationPage', () => {
     expect(screen.getByLabelText('Confirmation du mot de passe')).toBeInTheDocument()
 
     await fillForm(user, { password: TOO_SHORT_PASSWORD, confirmation: TOO_SHORT_PASSWORD })
-    await user.click(screen.getByRole('button', { name: "Créer l'administrateur" }))
+    await user.click(submitButton())
 
     expect(
       await screen.findByText(
@@ -127,6 +157,34 @@ describe('InstallationPage', () => {
       ),
     ).toBeInTheDocument()
     expect(createInitialAdminCalls(fetchMock)).toHaveLength(0)
+
+    await fillPasswords(user, { password: TOO_LONG_PASSWORD, confirmation: TOO_LONG_PASSWORD })
+    await user.click(submitButton())
+
+    expect(
+      await screen.findByText(
+        `Le mot de passe ne peut pas dépasser ${INITIAL_ADMIN_PASSWORD_MAX_LENGTH} caractères`,
+      ),
+    ).toBeInTheDocument()
+    expect(createInitialAdminCalls(fetchMock)).toHaveLength(0)
+
+    await fillPasswords(user, { password: VALID_PASSWORD, confirmation: VALID_PASSWORD })
+    await user.click(submitButton())
+
+    await waitFor(() => {
+      expect(createInitialAdminCalls(fetchMock)).toHaveLength(1)
+    })
+  })
+
+  it(`L'écran annonce que le mot de passe fait entre ${INITIAL_ADMIN_PASSWORD_MIN_LENGTH} et ${INITIAL_ADMIN_PASSWORD_MAX_LENGTH} caractères`, async () => {
+    stubApi()
+    renderInstallationPage()
+
+    expect(
+      await screen.findByText(
+        `Entre ${INITIAL_ADMIN_PASSWORD_MIN_LENGTH} et ${INITIAL_ADMIN_PASSWORD_MAX_LENGTH} caractères.`,
+      ),
+    ).toBeInTheDocument()
   })
 
   it('La confirmation doit correspondre', async () => {
@@ -168,7 +226,7 @@ describe('InstallationPage', () => {
     expect(await screen.findByText('Tableau de bord')).toBeInTheDocument()
   })
 
-  it("Dès qu'au moins un utilisateur existe, `/installation` redirige vers `/connexion`", async () => {
+  it("Dès qu'un utilisateur détient le rôle `admin`, `/installation` redirige vers `/connexion`", async () => {
     const fetchMock = stubApi({
       payload: {
         code: INSTALLATION_ERROR_CODES.alreadyInstalled,

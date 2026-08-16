@@ -1,4 +1,7 @@
-import { INITIAL_ADMIN_PASSWORD_MIN_LENGTH } from '@mooncello/contracts'
+import {
+  INITIAL_ADMIN_PASSWORD_MAX_LENGTH,
+  INITIAL_ADMIN_PASSWORD_MIN_LENGTH,
+} from '@mooncello/contracts'
 import { describe, expect, it } from 'vitest'
 import {
   type InitialAdminForm,
@@ -28,6 +31,30 @@ describe('initialAdminFormSchema', () => {
 
     expect(result.success).toBe(false)
     expect(result.error?.issues.map((issue) => issue.path[0])).toContain('password')
+  })
+
+  it(`refuse un mot de passe de plus de ${INITIAL_ADMIN_PASSWORD_MAX_LENGTH} caractères`, () => {
+    const tooLong = 'a'.repeat(INITIAL_ADMIN_PASSWORD_MAX_LENGTH + 1)
+    const result = initialAdminFormSchema.safeParse({
+      ...VALID_FORM,
+      password: tooLong,
+      passwordConfirmation: tooLong,
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.issues.map((issue) => issue.path[0])).toContain('password')
+  })
+
+  it(`accepte un mot de passe de très exactement ${INITIAL_ADMIN_PASSWORD_MAX_LENGTH} caractères`, () => {
+    const atLimit = 'a'.repeat(INITIAL_ADMIN_PASSWORD_MAX_LENGTH)
+
+    expect(
+      initialAdminFormSchema.safeParse({
+        ...VALID_FORM,
+        password: atLimit,
+        passwordConfirmation: atLimit,
+      }).success,
+    ).toBe(true)
   })
 
   it('La confirmation doit correspondre', () => {
