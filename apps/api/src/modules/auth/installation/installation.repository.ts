@@ -25,11 +25,15 @@ export async function hasUserWithRole(
   return result.rows[0]?.found ?? false
 }
 
-export async function listUsersWithoutRole(executor: Kysely<Database>): Promise<string[]> {
+export async function listUsersWithoutRoleByEmail(
+  executor: Kysely<Database>,
+  email: string,
+): Promise<string[]> {
   const result = await sql<{ id: string }>`
     select "user".id
     from "user"
-    where not exists (select 1 from user_roles where user_roles.user_id = "user".id)
+    where lower("user".email) = lower(${email})
+      and not exists (select 1 from user_roles where user_roles.user_id = "user".id)
   `.execute(executor)
 
   return result.rows.map((row) => row.id)

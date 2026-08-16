@@ -157,6 +157,40 @@ async function listSessions(): Promise<{ ipAddress: string; userAgent: string }[
   return result.rows
 }
 
+async function userExists(userId: string): Promise<boolean> {
+  const result = await sql<{ found: boolean }>`
+    select exists (select 1 from "user" where "user".id = ${userId}) as found
+  `.execute(database)
+
+  return result.rows[0]?.found ?? false
+}
+
+async function createUserWithRole(email: string, roleSlug: string): Promise<string> {
+  const context = await auth.$context
+  const user = await context.internalAdapter.createUser({
+    name: 'Grace Hopper',
+    email,
+    emailVerified: false,
+  })
+
+  await context.internalAdapter.linkAccount({
+    userId: user.id,
+    providerId: 'credential',
+    accountId: user.id,
+    password: await context.password.hash(initialAdmin.password),
+  })
+
+  const role = await database
+    .selectFrom('roles')
+    .select('id')
+    .where('slug', '=', roleSlug)
+    .executeTakeFirstOrThrow()
+
+  await database.insertInto('userRoles').values({ userId: user.id, roleId: role.id }).execute()
+
+  return user.id
+}
+
 async function interruptInstallationAfterUserCreation(email: string): Promise<string> {
   const context = await auth.$context
   const user = await context.internalAdapter.createUser({
@@ -453,6 +487,43 @@ describe('installation', () => {
     expect(await countAdmins()).toBe(1)
     expect(await listRoleSlugsOf(initialAdmin.email)).toEqual(['admin'])
     expect(await readStatus()).toEqual({ installed: true })
+  })
+
+  it('un utilisateur portant un rôle autre que `admin` survit à une réinstallation', async () => {
+    const editorId = await createUserWithRole('grace@mooncello.test', 'editor')
+
+    const retried = await requestInstallation(initialAdmin)
+
+    expect(retried.status).toBe(201)
+    expect(await userExists(editorId)).toBe(true)
+    expect(await listRoleSlugsOf('grace@mooncello.test')).toEqual(['editor'])
+    expect(await countUsers()).toBe(2)
+    expect(await countRowsIn('account')).toBe(2)
+    expect(await countAdmins()).toBe(1)
+  })
+
+  it('un utilisateur sans rôle mais avec un email différent de celui réinstallé survit à une réinstallation', async () => {
+    const untouchedId = await interruptInstallationAfterUserCreation('grace@mooncello.test')
+
+    const retried = await requestInstallation(initialAdmin)
+
+    expect(retried.status).toBe(201)
+    expect(await userExists(untouchedId)).toBe(true)
+    expect(await countUsers()).toBe(2)
+    expect(await countRowsIn('account')).toBe(2)
+    expect(await countAdmins()).toBe(1)
+    expect(await listRoleSlugsOf(initialAdmin.email)).toEqual(['admin'])
+  })
+
+  it("une réinstallation demandée avec le même email en casse mixte nettoie tout de même l'utilisateur sans rôle laissé par la tentative interrompue", async () => {
+    const orphanId = await interruptInstallationAfterUserCreation(initialAdmin.email)
+
+    const retried = await requestInstallation({ ...initialAdmin, email: 'Ada@Mooncello.Test' })
+
+    expect(retried.status).toBe(201)
+    expect(await userExists(orphanId)).toBe(false)
+    expect(await countUsers()).toBe(1)
+    expect(await listRoleSlugsOf(initialAdmin.email)).toEqual(['admin'])
   })
 
   it("l'inscription libre est coupée : `POST /api/auth/sign-up/email` est refusé et l'installation continue de fonctionner", async () => {

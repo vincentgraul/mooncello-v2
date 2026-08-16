@@ -8,7 +8,7 @@ import {
   assignRoleToUser,
   findRoleIdBySlug,
   hasUserWithRole,
-  listUsersWithoutRole,
+  listUsersWithoutRoleByEmail,
   lockInstallation,
 } from './installation.repository'
 
@@ -63,8 +63,11 @@ async function removeUserAccount(userId: string): Promise<void> {
   await context.internalAdapter.deleteUser(userId)
 }
 
-async function removeInterruptedInstallations(executor: Kysely<Database>): Promise<void> {
-  for (const userId of await listUsersWithoutRole(executor)) {
+async function removeInterruptedInstallations(
+  executor: Kysely<Database>,
+  email: string,
+): Promise<void> {
+  for (const userId of await listUsersWithoutRoleByEmail(executor, email)) {
     await removeUserAccount(userId)
   }
 }
@@ -128,7 +131,7 @@ export async function createInitialAdmin(
         throw new Error(`Le rôle système « ${ADMIN_ROLE_SLUG} » est introuvable`)
       }
 
-      await removeInterruptedInstallations(transaction)
+      await removeInterruptedInstallations(transaction, input.email)
 
       const admin = await createAdminAccount(input)
       createdUserId = admin.id
