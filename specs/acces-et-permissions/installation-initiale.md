@@ -6,7 +6,8 @@ ni dépendre d'un mot de passe par défaut.
 
 **Critères d'acceptation :**
 
-- [ ] Tant qu'aucun utilisateur n'existe, toute route de l'admin redirige vers `/installation`
+- [ ] Tant qu'aucun utilisateur ne détient le rôle `admin`, toute route de l'admin redirige vers
+      `/installation`
 - [ ] L'écran demande un nom, un email, un mot de passe et sa confirmation ; le mot de passe fait
       entre 12 et 128 caractères et l'écran refuse la soumission hors de ces bornes
 - [ ] La soumission crée l'utilisateur, lui attribue le rôle `admin`, ouvre une session et redirige
