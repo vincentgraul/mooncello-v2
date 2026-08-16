@@ -35,7 +35,7 @@ function listAdminRoleHolders() {
 
 test.describe.configure({ mode: 'serial' })
 
-test("Tant qu'aucun utilisateur n'existe, toute route de l'admin redirige vers `/installation`", async ({
+test("Tant qu'aucun utilisateur ne détient le rôle `admin`, toute route de l'admin redirige vers `/installation`", async ({
   page,
 }) => {
   expect(await queryDatabase('select id from "user"')).toHaveLength(0)

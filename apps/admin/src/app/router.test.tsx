@@ -1,24 +1,38 @@
+import { INSTALLATION_ROUTES } from '@mooncello/contracts'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryHistory, RouterProvider } from '@tanstack/react-router'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClient } from './query-client'
 import { createAppRouter } from './router'
 
-function jsonResponse(payload: unknown) {
+const ADMIN = {
+  name: 'Ada Lovelace',
+  email: 'ada@example.com',
+  password: 'correct-horse-battery-staple',
+}
+
+function jsonResponse(payload: unknown, status = 200) {
   return Promise.resolve({
-    ok: true,
-    status: 200,
+    ok: status < 400,
+    status,
     json: () => Promise.resolve(payload),
   } as Response)
 }
 
-function stubApi(isInstalled: () => boolean) {
+function stubApi(isInstalled: () => boolean, isStatusReachable: () => boolean = () => true) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = String(input)
 
-    if (url.endsWith('/api/installation/status')) {
-      return jsonResponse({ installed: isInstalled() })
+    if (url.endsWith(INSTALLATION_ROUTES.status.path)) {
+      return isStatusReachable()
+        ? jsonResponse({ installed: isInstalled() })
+        : Promise.reject(new TypeError('Failed to fetch'))
+    }
+
+    if (url.endsWith(INSTALLATION_ROUTES.createInitialAdmin.path)) {
+      return jsonResponse({ user: { id: 'usr_1', name: ADMIN.name, email: ADMIN.email } }, 201)
     }
 
     return jsonResponse({ status: 'ok' })
@@ -27,6 +41,12 @@ function stubApi(isInstalled: () => boolean) {
   vi.stubGlobal('fetch', fetchMock)
 
   return fetchMock
+}
+
+function statusCalls(fetchMock: ReturnType<typeof stubApi>) {
+  return fetchMock.mock.calls.filter(([input]) =>
+    String(input).endsWith(INSTALLATION_ROUTES.status.path),
+  )
 }
 
 function renderApp(initialPath: string) {
@@ -58,7 +78,7 @@ describe('createAppRouter', () => {
     vi.unstubAllGlobals()
   })
 
-  it("Tant qu'aucun utilisateur n'existe, toute route de l'admin redirige vers `/installation`", async () => {
+  it("Tant qu'aucun utilisateur ne détient le rôle `admin`, toute route de l'admin redirige vers `/installation`", async () => {
     stubApi(() => false)
 
     for (const path of ['/', '/connexion', '/une-route-inconnue']) {
@@ -88,7 +108,7 @@ describe('createAppRouter', () => {
       expect(router.state.location.pathname).toBe('/installation')
     })
 
-    const statusCallsBefore = fetchMock.mock.calls.length
+    const statusCallsBefore = statusCalls(fetchMock).length
 
     isInstalled = true
     await router.navigate({ to: '/' })
@@ -96,6 +116,60 @@ describe('createAppRouter', () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/')
     })
-    expect(fetchMock.mock.calls.length).toBeGreaterThan(statusCallsBefore)
+    expect(statusCalls(fetchMock).length).toBeGreaterThan(statusCallsBefore)
+  })
+
+  it('quand la requête de statut échoue, la garde se replie sur la dernière valeur connue en cache', async () => {
+    let isStatusReachable = true
+    stubApi(
+      () => false,
+      () => isStatusReachable,
+    )
+    const router = renderApp('/')
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/installation')
+    })
+
+    isStatusReachable = false
+    await router.navigate({ to: '/connexion' })
+
+    expect(
+      await screen.findByRole('heading', { name: 'Installation de Mooncello' }),
+    ).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/installation')
+    expect(screen.queryByRole('heading', { name: 'API injoignable' })).not.toBeInTheDocument()
+  })
+
+  it('quand la requête de statut échoue sans valeur en cache, la garde échoue', async () => {
+    stubApi(
+      () => false,
+      () => false,
+    )
+    const router = renderApp('/')
+
+    expect(await screen.findByRole('heading', { name: 'API injoignable' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
+  })
+
+  it("après la création de l'administrateur, une requête de statut en échec ne renvoie pas vers `/installation`", async () => {
+    let isStatusReachable = true
+    stubApi(
+      () => false,
+      () => isStatusReachable,
+    )
+    const user = userEvent.setup()
+    const router = renderApp('/')
+
+    await user.type(await screen.findByLabelText('Nom'), ADMIN.name)
+    await user.type(screen.getByLabelText('Adresse email'), ADMIN.email)
+    await user.type(screen.getByLabelText('Mot de passe', { exact: true }), ADMIN.password)
+    await user.type(screen.getByLabelText('Confirmation du mot de passe'), ADMIN.password)
+
+    isStatusReachable = false
+    await user.click(screen.getByRole('button', { name: "Créer l'administrateur" }))
+
+    expect(await screen.findByRole('heading', { name: 'Mooncello' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
   })
 })
