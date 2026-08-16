@@ -22,7 +22,7 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: Outlet,
   errorComponent: AppError,
   beforeLoad: async ({ context, location }) => {
-    const { installed } = await context.queryClient.ensureQueryData(installationStatusQueryOptions)
+    const { installed } = await context.queryClient.fetchQuery(installationStatusQueryOptions)
     const isOnInstallation = location.pathname === ROUTES.installation
 
     if (!installed && !isOnInstallation) {
